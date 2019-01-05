@@ -119,17 +119,25 @@ void checkInputFromBases() {
     if (state == STATE_LAUNCHED) {
       state = STATE_OFF_COURSE;
       sendCommand(CMD_BASE);
+      buzz();
       return;
     } 
     if (state == STATE_OFF_COURSE) {
       state = STATE_ON_COURSE;
       sendCommand(CMD_BASE);
+      buzz();
+      if (lateEntry == false) {
+        startTime = getTime();
+      } else {
+        sendCommand(CMD_LATE);      
+      }
       return;
     } 
     if (state == STATE_BASE_A) {
       state = STATE_BASE_B;
       numberOfTurns++;
       sendCommand(CMD_BASE);
+      buzz();
       if (numberOfTurns == 10) {
         finish();
       }
@@ -142,11 +150,7 @@ void checkInputFromBases() {
       state = STATE_BASE_A;
       numberOfTurns++;
       sendCommand(CMD_BASE);
-      if (lateEntry == false) {
-        startTime = getTime();
-      } else {
-        sendCommand(CMD_LATE);      
-      }
+      buzz();
       return;
     } 
 
@@ -154,6 +158,7 @@ void checkInputFromBases() {
       state = STATE_BASE_A;
       numberOfTurns++;
       sendCommand(CMD_BASE);
+      buzz();
       return;
     }
   }
@@ -194,6 +199,10 @@ void finish() {
 
 void sendCommand(String command) {
   serial.println(command);
+}
+
+void buzz() {
+  
 }
 
 float getElapsedSeconds() {
