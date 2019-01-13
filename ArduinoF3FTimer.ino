@@ -5,19 +5,22 @@
  * 
  */
 
- #include <SoftwareSerial.h>
+#include <SoftwareSerial.h>
 
 int PIN_RX = 0;
 int PIN_TX = 1;
 int PIN_BASE_A = 2;
 int PIN_BASE_B = 3;
 int PIN_LAUNCH = 4;
+int PIN_BUZZER = 5;
 
 int BAUD_RATE = 2400;
 
 String CMD_START = "S";
 String CMD_BASE = "P";
 String CMD_LATE = "L";
+
+unsigned long BUZZ_LENGTH = 200; // Length of time for buzzer to sound for
 
 enum ApplicationState: int {
   STATE_IDLE,
@@ -52,7 +55,6 @@ class Button {
           }
           
           bool v = digitalRead(_pin);
-          String pressed = (v) ? "1": "0";
 
           if (v != _state) {
               _state = v;
@@ -68,6 +70,7 @@ class Button {
 int state = STATE_IDLE;
 int numberOfTurns = 0;
 unsigned long startTime = 0;
+unsigned long buzzer = 0;
 bool lateEntry = false;
 
 Button baseA(PIN_BASE_A);
@@ -83,6 +86,10 @@ void setup() {
   baseA.begin();
   baseB.begin();
   launch.begin();
+
+  pinMode(PIN_BUZZER, OUTPUT);
+  digitalWrite(PIN_BUZZER, LOW);
+
 }
 
 void loop() {
@@ -90,16 +97,8 @@ void loop() {
   checkInputFromAndroid();
   checkInputFromLaunch();
   checkInputFromBases();
-  
-  if (state == STATE_LAUNCHED 
-    || state == STATE_OFF_COURSE) {
-    float etime = getElapsedSeconds();
-    if (etime >= 30) {
-      // Late Entry
-      startTime = getTime();
-      lateEntry = true;
-    }
-  }
+  checkForLateEntry();
+  checkForBuzzerExpired();
 }
 
 void checkInputFromAndroid(){
@@ -127,7 +126,7 @@ void checkInputFromBases() {
       sendCommand(CMD_BASE);
       buzz();
       if (lateEntry == false) {
-        startTime = getTime();
+        startTimer();
       } else {
         sendCommand(CMD_LATE);      
       }
@@ -172,17 +171,44 @@ void checkInputFromLaunch() {
   }
 }
 
+void checkForLateEntry() {
+  if (state == STATE_LAUNCHED 
+    || state == STATE_OFF_COURSE) {
+    float etime = getElapsedSeconds();
+    if (etime >= 30) {
+      // Late Entry
+      startTimer();
+      lateEntry = true;
+    }
+  }
+}
+
+void checkForBuzzerExpired() {
+  if (buzzer == 0) return;
+  if (getTime() - buzzer > BUZZ_LENGTH){
+    digitalWrite(PIN_BUZZER, LOW);
+    buzzer = 0;
+  }
+}
+
 void reset(){
   state = STATE_IDLE;
 }
 
-void start(){
+void start() {
   state = STATE_LAUNCHED;
   numberOfTurns = 0;
   lateEntry = false;
 }
 
+void startTimer() {
+  startTime = getTime();
+}
+
 void finish() {
+  //TimeSpan ts = rtc.now() - started;
+  //sendCommand(String(ts.totalseconds()));
+  
   float etime = getElapsedSeconds();
   char buffer[9];
   
@@ -202,12 +228,13 @@ void sendCommand(String command) {
 }
 
 void buzz() {
-  
+  digitalWrite(PIN_BUZZER, HIGH);
+  buzzer = getTime();
 }
 
 float getElapsedSeconds() {
-  unsigned long time = getTime() - startTime;
-  return (float)time/1000;
+  unsigned long tme = getTime() - startTime;
+  return (float)tme/1000;
 }
 
 unsigned long getTime() {
