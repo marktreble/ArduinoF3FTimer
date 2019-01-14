@@ -5,16 +5,18 @@
  * 
  */
 
+#include "RTClib.h"
 #include <SoftwareSerial.h>
 
-int PIN_RX = 0;
-int PIN_TX = 1;
-int PIN_BASE_A = 2;
-int PIN_BASE_B = 3;
-int PIN_LAUNCH = 4;
-int PIN_BUZZER = 5;
+int PIN_RX = 11;
+int PIN_TX = 12;
+int PIN_TIMER = 2;
+int PIN_BASE_A = 3;
+int PIN_BASE_B = 4;
+int PIN_LAUNCH = 5;
+int PIN_BUZZER = 13;
 
-int BAUD_RATE = 2400;
+int BAUD_RATE = 9600;
 
 String CMD_START = "S";
 String CMD_BASE = "P";
@@ -79,6 +81,11 @@ Button launch(PIN_LAUNCH);
 
 SoftwareSerial serial(PIN_RX, PIN_TX);
 
+RTC_DS3231 rtc;
+unsigned long ticks = 0;
+unsigned long seconds = 0;
+unsigned long milliseconds = 0;
+
 void setup() {
   // put your setup code here, to run once:
   serial.begin(BAUD_RATE);
@@ -90,6 +97,15 @@ void setup() {
   pinMode(PIN_BUZZER, OUTPUT);
   digitalWrite(PIN_BUZZER, LOW);
 
+  // Set up RTC
+  pinMode(PIN_TIMER, INPUT);
+  attachInterrupt(digitalPinToInterrupt(PIN_TIMER), incTime, RISING);
+
+  if (! rtc.begin()) {
+    Serial.print("Couldn't find RTC");
+  } else {
+    rtc.writeSqwPinMode(DS3231_SquareWave4kHz);
+  }
 }
 
 void loop() {
@@ -99,6 +115,8 @@ void loop() {
   checkInputFromBases();
   checkForLateEntry();
   checkForBuzzerExpired();
+  Serial.println(getElapsedSeconds());
+  
 }
 
 void checkInputFromAndroid(){
@@ -135,11 +153,11 @@ void checkInputFromBases() {
     if (state == STATE_BASE_A) {
       state = STATE_BASE_B;
       numberOfTurns++;
-      sendCommand(CMD_BASE);
-      buzz();
       if (numberOfTurns == 10) {
         finish();
       }
+      sendCommand(CMD_BASE);
+      buzz();
       return;
     }
   }
@@ -205,20 +223,19 @@ void startTimer() {
   startTime = getTime();
 }
 
-void finish() {
-  //TimeSpan ts = rtc.now() - started;
-  //sendCommand(String(ts.totalseconds()));
-  
+void finish() {  
   float etime = getElapsedSeconds();
   char buffer[9];
   
-  dtostrf(etime,9,5,buffer);
+  dtostrf(etime,8,4,buffer);
   // Fill in leading zeros into buffer
   if (etime<100) buffer[0] = 48;
   if (etime<10) buffer[1] = 48;
 
+  delay(100);
   sendCommand("E");
   sendCommand(String(buffer));
+  sendCommand("\r");
 
   reset();
 }
@@ -238,8 +255,17 @@ float getElapsedSeconds() {
 }
 
 unsigned long getTime() {
-  // Needs converting to read from RTC
-  return millis();
+  return (seconds * 1000) + milliseconds;
+}
+
+void incTime() {
+  ticks += 1;
+  if (ticks >= 4096){
+    ticks -= 4096;
+    seconds++;
+    
+  }
+  milliseconds = floor(ticks/4.096);
 }
 
 
