@@ -8,12 +8,12 @@
 #include "RTClib.h"
 #include <SoftwareSerial.h>
 
-int PIN_RX = 11;
-int PIN_TX = 12;
+int PIN_RX = 12;
+int PIN_TX = 10;
 int PIN_TIMER = 2;
-int PIN_BASE_A = 3;
-int PIN_BASE_B = 4;
-int PIN_LAUNCH = 5;
+int PIN_BASE_A = 4;
+int PIN_BASE_B = 5;
+int PIN_LAUNCH = 3;
 int PIN_BUZZER = 13;
 
 int BAUD_RATE = 9600;
@@ -22,7 +22,7 @@ String CMD_START = "S";
 String CMD_BASE = "P";
 String CMD_LATE = "L";
 
-unsigned long BUZZ_LENGTH = 200; // Length of time for buzzer to sound for
+unsigned long BUZZ_LENGTH = 75; // Length of time for buzzer to sound for
 
 enum ApplicationState: int {
   STATE_IDLE,
@@ -88,6 +88,7 @@ unsigned long milliseconds = 0;
 
 void setup() {
   // put your setup code here, to run once:
+  Serial.begin(9600);
   serial.begin(BAUD_RATE);
 
   baseA.begin();
@@ -104,6 +105,7 @@ void setup() {
   if (! rtc.begin()) {
     Serial.print("Couldn't find RTC");
   } else {
+    Serial.print("Setting RTC Frequency");
     rtc.writeSqwPinMode(DS3231_SquareWave4kHz);
   }
 }
@@ -115,7 +117,6 @@ void loop() {
   checkInputFromBases();
   checkForLateEntry();
   checkForBuzzerExpired();
-  Serial.println(getElapsedSeconds());
   
 }
 
@@ -123,7 +124,7 @@ void checkInputFromAndroid(){
   while (serial.available() > 0) {
       // read the incoming byte:
       int incomingByte = serial.read();
-      
+
       if (incomingByte == 65) reset(); // ASCII A
       if (incomingByte == 83) start(); // ASCII S
   }  
@@ -153,11 +154,11 @@ void checkInputFromBases() {
     if (state == STATE_BASE_A) {
       state = STATE_BASE_B;
       numberOfTurns++;
+      sendCommand(CMD_BASE);
+      buzz();
       if (numberOfTurns == 10) {
         finish();
       }
-      sendCommand(CMD_BASE);
-      buzz();
       return;
     }
   }
@@ -217,6 +218,7 @@ void start() {
   state = STATE_LAUNCHED;
   numberOfTurns = 0;
   lateEntry = false;
+  startTimer();
 }
 
 void startTimer() {
@@ -227,15 +229,13 @@ void finish() {
   float etime = getElapsedSeconds();
   char buffer[9];
   
-  dtostrf(etime,8,4,buffer);
+  dtostrf(etime,9,5,buffer);
   // Fill in leading zeros into buffer
   if (etime<100) buffer[0] = 48;
   if (etime<10) buffer[1] = 48;
 
   delay(100);
-  sendCommand("E");
-  sendCommand(String(buffer));
-  sendCommand("\r");
+  sendCommand("E\n" + String(buffer));
 
   reset();
 }
@@ -262,8 +262,7 @@ void incTime() {
   ticks += 1;
   if (ticks >= 4096){
     ticks -= 4096;
-    seconds++;
-    
+    seconds++;  
   }
   milliseconds = floor(ticks/4.096);
 }
